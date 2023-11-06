@@ -63,6 +63,11 @@ res.send(result)
       const result = await roomsCollection.insertOne(room);
       res.send(result)
     })
+    app.post('/api/v1/booking/new',async(req,res)=>{
+      const booking = req.body;
+      const result = await collectionBooking.insertOne(booking);
+      res.send(result)
+    })
     app.post('/api/v1/reviews/post',async(req,res)=>{
       const review = req.body;
       const result = await collectionReviews.insertOne(review);
