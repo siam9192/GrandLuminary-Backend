@@ -49,10 +49,19 @@ res.send(result)
       res.send(result);
     })
 
+    app.get('api/v1/reviews',async(req,res)=>{
+      const result = await collectionReviews.find.toArray();
+      res.send(result)
+    })
     app.post('/api/v1/rooms/new',async(req,res)=>{
       const room = req.body;
       const result = await roomsCollection.insertOne(room);
       res.send(result)
+    })
+    app.post('api/v1/reviews/post',async(req,res)=>{
+      const review = req.body;
+      const result = await collectionReviews.insertOne(review);
+      res.send(review)
     })
     
     
