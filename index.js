@@ -1,16 +1,16 @@
 const express = require('express');
 const cors = require('cors');
-const port = process.env.PORT || 5000;
-// const tokenParser = require('tokenParser');
-require('dotenv').config();
+const port = 5000;
+const cookieParser = require('cookie-parser');
+// const jwt = require('jsonwebtoken');
+require('dotenv').config()
 const app = express();
 app.use(cors({
   origin:["http://localhost:5173"],
   credentials:true
-}));
-app.use(express.json())
-// app.use(tokenParser())
-
+}))
+app.use(express.json());
+app.use(cookieParser());
 app.get('/',(req,res)=>{
     res.send('working')
 })
@@ -38,35 +38,34 @@ async function run() {
     app.get('/api/v1/rooms',async(req,res)=>{
 const result = await roomsCollection.find().toArray();
 res.send(result)
-console.log(result)
+
     })
-    app.get('/api/v1/room/:id',async(req,res)=>{
-      const {id} = req.params;
+    app.get('/api/v1/room',async(req,res)=>{
+      const id = req.query.id
       const query = {
-        _id: new ObjectId(id)
+        _id : new ObjectId(id)
       }
-      
       const result = await roomsCollection.findOne(query);
-      res.send(result);
-      
+      res.send(result)
     })
 app.get('/api/v1/bookings',async(req,res)=>{
   const query = req.query;
 const result = await collectionBooking.find(query).toArray();
 res.send(result)
-console.log(result)
+
 })
     app.get('/api/v1/reviews',async(req,res)=>{
       const query = req.query;
       const result = await collectionReviews.find(query).toArray();
       res.send(result)
+   
     })
-    // app.get('/api/v1/bookings',async(req,res)=>{
-    //   const query = req.query;
-    //    const result = await collectionBooking.find(query).toArray();
-    //    res.send(result)
-    
-    // })
+    app.get('/api/v1/find/booking',async(req,res)=>{
+      const query = req.query;
+      const result = await collectionBooking.find(query).toArray();
+      res.send(result);
+    })
+   
     app.post('/api/v1/rooms/new',async(req,res)=>{
       const room = req.body;
       const result = await roomsCollection.insertOne(room);
@@ -74,8 +73,9 @@ console.log(result)
     })
     app.post('/api/v1/booking/new',async(req,res)=>{
       const booking = req.body;
-      const result = await collectionBooking.insertOne(booking);
-      res.send(result)
+      console.log(booking)
+      // const result = await collectionBooking.insertOne(booking);
+      // res.send(result)
     })
     app.post('/api/v1/reviews/post',async(req,res)=>{
       const review = req.body;
@@ -83,9 +83,20 @@ console.log(result)
       res.send(result)
     })
     
-    app.delete('/api/v1/bookings/delete/:id',(req,res)=>{
-      const {id} = req.params.id ;
-      console.log(id)
+    app.patch('/api/v1/update-room',(req,res)=>{
+      const query = req.body;
+      const filter = {
+        _id: new ObjectId(req.query.id)
+      }
+      const updatedDoc = {
+        $set: query
+      }
+      const result = roomsCollection.updateOne(filter,updatedDoc);
+      res.send(result)
+    })
+    
+    app.delete('/api/v1/booking/delete/:id',(req,res)=>{
+      const {id} = req.params ;
       const query = {_id: new ObjectId(id)};
       const result = collectionBooking.deleteOne(query);
       res.send(result)
