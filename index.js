@@ -40,14 +40,22 @@ const result = await roomsCollection.find().toArray();
 res.send(result)
 
     })
-    app.get('/api/v1/room',async(req,res)=>{
-      const id = req.query.id
+    // app.get('/api/v1/room',async(req,res)=>{
+    //   const id = req.query.id
+    //   const query = {
+    //     _id : new ObjectId(id)
+    //   }
+    //   const result = await roomsCollection.findOne(query);
+    //   res.send(result)
+    // })
+     app.get('/api/v1/room/get',async(req,res)=>{
+        const id = req.query.id
       const query = {
         _id : new ObjectId(id)
       }
       const result = await roomsCollection.findOne(query);
       res.send(result)
-    })
+     })
 app.get('/api/v1/bookings',async(req,res)=>{
   const query = req.query;
 const result = await collectionBooking.find(query).toArray();
@@ -58,7 +66,6 @@ res.send(result)
       const query = req.query;
       const result = await collectionReviews.find(query).toArray();
       res.send(result)
-   
     })
     app.get('/api/v1/find/booking',async(req,res)=>{
       const query = req.query;
@@ -73,9 +80,9 @@ res.send(result)
     })
     app.post('/api/v1/booking/new',async(req,res)=>{
       const booking = req.body;
-      console.log(booking)
-      // const result = await collectionBooking.insertOne(booking);
-      // res.send(result)
+      // console.log(booking)
+      const result = await collectionBooking.insertOne(booking);
+      res.send(result)
     })
     app.post('/api/v1/reviews/post',async(req,res)=>{
       const review = req.body;
@@ -83,7 +90,7 @@ res.send(result)
       res.send(result)
     })
     
-    app.patch('/api/v1/update-room',(req,res)=>{
+    app.patch('/api/v1/update-room',async(req,res)=>{
       const query = req.body;
       const filter = {
         _id: new ObjectId(req.query.id)
@@ -91,15 +98,29 @@ res.send(result)
       const updatedDoc = {
         $set: query
       }
-      const result = roomsCollection.updateOne(filter,updatedDoc);
+     
+      const result = await roomsCollection.updateOne(filter,updatedDoc);
+      console.log(result)
       res.send(result)
     })
-    
+    app.patch('/api/v1/booking/update',async(req,res)=>{
+      const id = req.query.id;
+      const query = req.body;
+      const filter = {
+        _id : new ObjectId(id)
+      }
+      const updatedDoc = {
+        $set: query      }
+      const result = await collectionBooking.updateOne(filter,updatedDoc);
+      res.send(result)
+      
+console.log(result)
+    })
     app.delete('/api/v1/booking/delete/:id',(req,res)=>{
       const {id} = req.params ;
       const query = {_id: new ObjectId(id)};
       const result = collectionBooking.deleteOne(query);
-      res.send(result)
+      res.send(result);
     })
     
   } finally {
