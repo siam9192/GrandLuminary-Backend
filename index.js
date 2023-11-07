@@ -33,11 +33,12 @@ async function run() {
     const db = client.db('Grand-Lumainary');
     const collectionReviews = db.collection('Reviews');
     const roomsCollection = db.collection('Rooms');
-    const collectionBooking = db.collection('Booking');
+    const collectionBooking = db.collection('Bookings');
     
     app.get('/api/v1/rooms',async(req,res)=>{
 const result = await roomsCollection.find().toArray();
 res.send(result)
+console.log(result)
     })
     app.get('/api/v1/room/:id',async(req,res)=>{
       const {id} = req.params;
@@ -46,18 +47,26 @@ res.send(result)
       }
       
       const result = await roomsCollection.findOne(query);
-      console.log(result)
       res.send(result);
+      
     })
-app.get('api/v1/booking',async(req,res)=>{
+app.get('/api/v1/bookings',async(req,res)=>{
   const query = req.query;
 const result = await collectionBooking.find(query).toArray();
 res.send(result)
+console.log(result)
 })
     app.get('/api/v1/reviews',async(req,res)=>{
-      const result = await collectionReviews.find().toArray();
+      const query = req.query;
+      const result = await collectionReviews.find(query).toArray();
       res.send(result)
     })
+    // app.get('/api/v1/bookings',async(req,res)=>{
+    //   const query = req.query;
+    //    const result = await collectionBooking.find(query).toArray();
+    //    res.send(result)
+    
+    // })
     app.post('/api/v1/rooms/new',async(req,res)=>{
       const room = req.body;
       const result = await roomsCollection.insertOne(room);
@@ -71,9 +80,16 @@ res.send(result)
     app.post('/api/v1/reviews/post',async(req,res)=>{
       const review = req.body;
       const result = await collectionReviews.insertOne(review);
-      res.send(review)
+      res.send(result)
     })
     
+    app.delete('/api/v1/bookings/delete/:id',(req,res)=>{
+      const {id} = req.params.id ;
+      console.log(id)
+      const query = {_id: new ObjectId(id)};
+      const result = collectionBooking.deleteOne(query);
+      res.send(result)
+    })
     
   } finally {
    
