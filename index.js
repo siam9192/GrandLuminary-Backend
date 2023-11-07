@@ -2,7 +2,7 @@ const express = require('express');
 const cors = require('cors');
 const port = 5000;
 const cookieParser = require('cookie-parser');
-// const jwt = require('jsonwebtoken');
+const jwt = require('jsonwebtoken');
 require('dotenv').config()
 const app = express();
 app.use(cors({
@@ -16,6 +16,24 @@ app.get('/',(req,res)=>{
 })
 app.listen(port)
 
+const security =(req,res,next)=>{
+  const token = req.cookies.token;
+  if(!token){
+    res.status(401).send({status:'unauthorized'})
+    return;
+  }
+  jwt.verify(token,process.env.SECRET,(err,decode)=>{
+if(err){
+  console.log(err).message;
+  return;
+}
+console.log(decode)
+req.user = decode;
+next()
+  })
+
+} 
+
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.katjfem.mongodb.net/?retryWrites=true&w=majority`;
 
@@ -27,6 +45,7 @@ const client = new MongoClient(uri, {
     deprecationErrors: true,
   }
 });
+
 
 async function run() {
   try {
@@ -40,14 +59,7 @@ const result = await roomsCollection.find().toArray();
 res.send(result)
 
     })
-    // app.get('/api/v1/room',async(req,res)=>{
-    //   const id = req.query.id
-    //   const query = {
-    //     _id : new ObjectId(id)
-    //   }
-    //   const result = await roomsCollection.findOne(query);
-    //   res.send(result)
-    // })
+  
      app.get('/api/v1/room/get',async(req,res)=>{
         const id = req.query.id
       const query = {
@@ -56,7 +68,11 @@ res.send(result)
       const result = await roomsCollection.findOne(query);
       res.send(result)
      })
-app.get('/api/v1/bookings',async(req,res)=>{
+app.get('/api/v1/bookings',security,async(req,res)=>{
+  if(req.body.email !== req.query.email){
+    res.status(401).send({status:'unauthorized'});
+    return;
+  }
   const query = req.query;
 const result = await collectionBooking.find(query).toArray();
 res.send(result)
@@ -80,7 +96,6 @@ res.send(result)
     })
     app.post('/api/v1/booking/new',async(req,res)=>{
       const booking = req.body;
-      // console.log(booking)
       const result = await collectionBooking.insertOne(booking);
       res.send(result)
     })
@@ -90,6 +105,22 @@ res.send(result)
       res.send(result)
     })
     
+    app.post('/api/v1/jwt',(req,res)=>{
+      const user = req.body;
+      
+    const token =  jwt.sign(user,process.env.SECRET,{
+        expiresIn: '24h'
+      })
+      res.cookie('token',token,{
+      httpOnly: true,
+      secure: true,
+      sameSite:'none'
+      })
+      res.send({status:true})
+    })
+    app.post('/api/v1/logout',(req,res)=>{
+      res.clearCookie('token',{maxAge:0}).send({status:true})
+      })
     app.patch('/api/v1/update-room',async(req,res)=>{
       const query = req.body;
       const filter = {
