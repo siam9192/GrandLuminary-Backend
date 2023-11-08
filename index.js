@@ -7,7 +7,7 @@ require('dotenv').config()
 const app = express();
 app.use(cors({
   origin:["http://localhost:5173"],
-  credentials:true
+  credentials: true
 }))
 app.use(express.json());
 app.use(cookieParser());
@@ -55,7 +55,26 @@ async function run() {
     const collectionBooking = db.collection('Bookings');
     
     app.get('/api/v1/rooms',async(req,res)=>{
-const result = await roomsCollection.find().toArray();
+      let query = {};
+     if(req.query.min_price && req.query.max_price){
+      query.price = {
+        $gte: parseInt( req.query.min_price),
+        $lte: parseInt(req.query.max_price)
+      }
+     }
+      let sort = {
+
+      }
+      if(req.query.sort_type !== 'All'){
+        if(req.query.sort_type === "low to high"){
+          sort.price = 'asc'
+        }
+       else if(req.query.sort_type === "high to low"){
+          sort.price = 'desc'
+        }
+      }
+     
+      const result = await roomsCollection.find(query).sort(sort).toArray();
 res.send(result)
 
     })
@@ -78,10 +97,16 @@ const result = await collectionBooking.find(query).toArray();
 res.send(result)
 
 })
+
     app.get('/api/v1/reviews',async(req,res)=>{
       const query = req.query;
       const result = await collectionReviews.find(query).toArray();
       res.send(result)
+    })
+    app.get('/api/user/review',async(req,res)=>{
+      const query = req.query;
+      const result = await collectionReviews.find(query).toArray();
+      res.send(result);
     })
     app.get('/api/v1/find/booking',async(req,res)=>{
       const query = req.query;
@@ -94,6 +119,7 @@ res.send(result)
       const result = await roomsCollection.insertOne(room);
       res.send(result)
     })
+  
     app.post('/api/v1/booking/new',async(req,res)=>{
       const booking = req.body;
       const result = await collectionBooking.insertOne(booking);
@@ -131,7 +157,6 @@ res.send(result)
       }
      
       const result = await roomsCollection.updateOne(filter,updatedDoc);
-      console.log(result)
       res.send(result)
     })
     app.patch('/api/v1/booking/update',async(req,res)=>{
