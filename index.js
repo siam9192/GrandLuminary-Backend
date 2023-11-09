@@ -5,9 +5,11 @@ const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
 require('dotenv').config()
 const app = express();
+// "http://localhost:5173","https://grand-luminary.web.app/",
 app.use(cors({
-  origin:["http://localhost:5173"],
-  credentials: true
+  origin:["https://grand-luminary.web.app","http://localhost:5173","https://grand-luminary.web.app/"],
+  credentials: true,
+  methods:["GET","POST","PUT","PATCH","DELETE"]
 }))
 app.use(express.json());
 app.use(cookieParser());
@@ -87,7 +89,7 @@ res.send(result)
       const result = await roomsCollection.findOne(query);
       res.send(result)
      })
-app.get('/api/v1/bookings',security,async(req,res)=>{
+app.get('/api/v1/bookings',async(req,res)=>{
   if(req.body.email !== req.query.email){
     res.status(401).send({status:'unauthorized'});
     return;
@@ -100,8 +102,10 @@ res.send(result)
 
     app.get('/api/v1/reviews',async(req,res)=>{
       const query = req.query;
+      console.log(query)
       const result = await collectionReviews.find(query).toArray();
       res.send(result)
+      console.log(result)
     })
     app.get('/api/user/review',async(req,res)=>{
       const query = req.query;
@@ -139,8 +143,8 @@ res.send(result)
       })
       res.cookie('token',token,{
       httpOnly: true,
-      secure: true,
-      sameSite:'none'
+      secure: true
+     
       })
       res.send({status:true})
     })
@@ -170,7 +174,6 @@ res.send(result)
       const result = await collectionBooking.updateOne(filter,updatedDoc);
       res.send(result)
       
-console.log(result)
     })
     app.delete('/api/v1/booking/delete/:id',(req,res)=>{
       const {id} = req.params ;
