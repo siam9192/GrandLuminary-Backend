@@ -3,14 +3,12 @@ const cors = require('cors');
 const port = 5000;
 const cookieParser = require('cookie-parser');
 const jwt = require('jsonwebtoken');
+const bodyParser = require('body-parser')
 require('dotenv').config()
+const stripe = require('stripe')(process.env.STRIPE_SECRET);
 const app = express();
-// "http://localhost:5173","https://grand-luminary.web.app/",
-app.use(cors({
-  origin:["https://grand-luminary.web.app","http://localhost:5173","https://grand-luminary.web.app/"],
-  credentials: true,
-  methods:["GET","POST","PUT","PATCH","DELETE"]
-}))
+
+app.use(cors())
 app.use(express.json());
 app.use(cookieParser());
 app.get('/',(req,res)=>{
@@ -18,23 +16,6 @@ app.get('/',(req,res)=>{
 })
 app.listen(port)
 
-const security =(req,res,next)=>{
-  const token = req.cookies.token;
-  if(!token){
-    res.status(401).send({status:'unauthorized'})
-    return;
-  }
-  jwt.verify(token,process.env.SECRET,(err,decode)=>{
-if(err){
-  console.log(err).message;
-  return;
-}
-console.log(decode)
-req.user = decode;
-next()
-  })
-
-} 
 
 const { MongoClient, ServerApiVersion, ObjectId } = require('mongodb');
 const uri = `mongodb+srv://${process.env.DB_USER}:${process.env.DB_PASS}@cluster0.katjfem.mongodb.net/?retryWrites=true&w=majority`;
@@ -51,137 +32,265 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    const db = client.db('Grand-Lumainary');
-    const collectionReviews = db.collection('Reviews');
-    const roomsCollection = db.collection('Rooms');
-    const collectionBooking = db.collection('Bookings');
-    
-    app.get('/api/v1/rooms',async(req,res)=>{
-      let query = {};
-     if(req.query.min_price && req.query.max_price){
-      query.price = {
-        $gte: parseInt( req.query.min_price),
-        $lte: parseInt(req.query.max_price)
+    const db = client.db('Ego-Ecommerce');
+    const productCollection = db.collection('Products');
+    const registered_users = db.collection('Users') 
+    const cartCollection = db.collection('Carts')
+    const productsReviewCollection = db.collection('Reviews')
+
+    app.get('/products',async(req,res)=>{
+      const query = req.query;
+      const filter = { 
+       }
+      const category = query.category.split('--');
+      const brands  = query.brands.split('--');
+      const minPrice = parseInt(query.minPrice);
+      const maxPrice = parseInt(query.maxPrice);
+
+      const perPage = parseInt(query.perPage);
+      const currentPage = parseInt(query.currentPage)
+      console.log(currentPage)
+      category.shift();
+      brands.shift();
+    if(category.length){
+      filter.category={$in:category}
+    }
+    if(brands.length){
+      filter.brand = {$in:brands}
+    }
+    if(minPrice){
+      filter.pricing = {}
+      filter.pricing.price = {}
+     filter.pricing.price.$gt = minPrice
+    }
+    if(maxPrice){
+      if(filter.pricing){
+      filter.pricing.price.$lt = maxPrice
+      }
+      else{
+        filter.pricing = {}
+        filter.pricing.price.$lt = maxPrice
       }
      }
-      let sort = {
 
+ 
+      const result = await productCollection.find(filter).skip((currentPage-1)*perPage).limit(perPage).toArray();
+      res.send(result);
+      
+    })
+    app.get('/products/document-count',async(req,res)=>{
+      const query = req.query;
+      const filter = {  }
+      const category = query.category.split('--');
+      const brands  = query.brands.split('--');
+      const minPrice = parseInt(query.minPrice);
+      const maxPrice = parseInt(query.maxPrice);
+      category.shift();
+      brands.shift();
+    if(category.length){
+      filter.category={$in:category}
+    }
+    if(brands.length){
+      filter.brand = {$in:brands}
+    }
+    if(minPrice){
+      filter.pricing = {}
+      filter.pricing.price = {}
+     filter.pricing.price.$gt = minPrice
+    }
+    if(maxPrice){
+      if(filter.pricing){
+      filter.pricing.price.$lt = maxPrice
       }
-      if(req.query.sort_type !== 'All'){
-        if(req.query.sort_type === "low to high"){
-          sort.price = 'asc'
-        }
-       else if(req.query.sort_type === "high to low"){
-          sort.price = 'desc'
-        }
+      else{
+        filter.pricing = {}
+        filter.pricing.price.$lt = maxPrice
       }
-     
-      const result = await roomsCollection.find(query).sort(sort).toArray();
-res.send(result)
+     }
+   const result = await productCollection.countDocuments(filter);
+   res.send({document:result})
+  
 
     })
-  
-     app.get('/api/v1/room/get',async(req,res)=>{
-        const id = req.query.id
+
+    app.get('/product/get-details/:id',async(req,res)=>{
       const query = {
-        _id : new ObjectId(id)
+        _id:new ObjectId(req.params.id)
       }
-      const result = await roomsCollection.findOne(query);
+      const result = await productCollection.findOne(query);
+      res.send(result)
+    })
+    app.get('/products-all/new-arrivals',async(req,res)=>{
+      const category = req.query.category;
+      const filter = {
+        category
+      }
+      const result = await productCollection.find(filter).toArray();
+      res.send(result)
+    
+    })
+     app.post('/product/post',async(req,res)=>{
+      const product = req.body;
+      const result = await productCollection.insertOne(product);
       res.send(result)
      })
-app.get('/api/v1/bookings',async(req,res)=>{
-  if(req.body.email !== req.query.email){
-    res.status(401).send({status:'unauthorized'});
-    return;
-  }
-  const query = req.query;
-const result = await collectionBooking.find(query).toArray();
-res.send(result)
 
+     app.get('/products/deal-of-the-day',async(req,res)=>{
+      const query = {
+        currentStatus:'Deal of the day'
+      }
+      const result = await productCollection.find(query).toArray();
+      res.send(result)
+     })
+     app.get('/products/best-selling',async(req,res)=>{
+      const query = {
+        currentStatus:'Best Selling'
+      }
+      const result = await productCollection.find(query).toArray();
+      res.send(result)
+     })
+     app.get('/products/recomended',async(req,res)=>{
+      const query = {
+        'pricing.discount': {
+          $gt: 0
+        }
+      }
+      const result = await productCollection.find(query).toArray();
+      res.send(result)
+     })
+   
+  // Add to cart
+app.post('/add-to-cart',async(req,res)=>{
+const cart = req.body;
+const result = await cartCollection.insertOne(cart);
+res.send(result)
 })
 
-    app.get('/api/v1/reviews',async(req,res)=>{
-      const query = req.query;
-      console.log(query)
-      const result = await collectionReviews.find(query).toArray();
-      res.send(result)
-      console.log(result)
-    })
-    app.get('/api/user/review',async(req,res)=>{
-      const query = req.query;
-      const result = await collectionReviews.find(query).toArray();
-      res.send(result);
-    })
-    app.get('/api/v1/find/booking',async(req,res)=>{
-      const query = req.query;
-      const result = await collectionBooking.find(query).toArray();
-      res.send(result);
-    })
-   
-    app.post('/api/v1/rooms/new',async(req,res)=>{
-      const room = req.body;
-      const result = await roomsCollection.insertOne(room);
-      res.send(result)
-    })
+  // users Cart
+  app.get('/user/cart/:email',async(req,res)=>{
+    const email = req.params.email;
+    const query = {email};
+    const result = await cartCollection.find(query).toArray();
+    res.send(result)
+  })
+  app.delete('/user/cart/delete',async(req,res)=>{
+    const id = req.query.id;
+    const filter = {
+      _id: new ObjectId(id)
+    }
   
-    app.post('/api/v1/booking/new',async(req,res)=>{
-      const booking = req.body;
-      const result = await collectionBooking.insertOne(booking);
-      res.send(result)
-    })
-    app.post('/api/v1/reviews/post',async(req,res)=>{
-      const review = req.body;
-      const result = await collectionReviews.insertOne(review);
-      res.send(result)
-    })
+    const result = await cartCollection.deleteOne(filter);
+    res.send(result)
+    console.log(result)
+   
+  })
+
+  // stripe payment 
+  app.post('/create-checkout-session',async(req,res)=>{
+    const {products} = req.body;
+    // const metaData = {
+    //   userEmail:
+    // }
+    const getPercentageValue = (mainNumber,percent)=>{
+      const result = (percent/100)*mainNumber;
+      return parseInt(result);
+    }
     
-    app.post('/api/v1/jwt',(req,res)=>{
-      const user = req.body;
-      
-    const token =  jwt.sign(user,process.env.SECRET,{
-        expiresIn: '24h'
-      })
-      res.cookie('token',token,{
-      httpOnly: true,
-      secure: true
-     
-      })
-      res.send({status:true})
+    const lineItems = products.map((product)=>({
+      price_data :{
+        currency:'USD',
+        product_data:{
+          name:product.name,
+          images:[product.image]
+        },
+        unit_amount:Math.round(product.price * 100),
+      },
+      quantity:product.quantity
+
+    }))
+ 
+    const session = await stripe.checkout.sessions.create({
+      payment_method_types:['card'],
+      line_items:lineItems,
+      mode:'payment',
+      metadata:
+        {
+          customer:JSON.stringify(products.map(cart=>cart.email)),
+          cartsId:JSON.stringify(products.map(cart=> cart._id))
+        }
+      ,
+      success_url:'http://localhost:5173/ego/my-cart',
+      cancel_url:'http://localhost:5173/ego/my-cart'
     })
-    app.post('/api/v1/logout',(req,res)=>{
-      res.clearCookie('token',{maxAge:0}).send({status:true})
-      })
-    app.patch('/api/v1/update-room',async(req,res)=>{
-      const query = req.body;
-      const filter = {
-        _id: new ObjectId(req.query.id)
-      }
-      const updatedDoc = {
-        $set: query
-      }
-     
-      const result = await roomsCollection.updateOne(filter,updatedDoc);
-      res.send(result)
-    })
-    app.patch('/api/v1/booking/update',async(req,res)=>{
-      const id = req.query.id;
-      const query = req.body;
-      const filter = {
-        _id : new ObjectId(id)
-      }
-      const updatedDoc = {
-        $set: query      }
-      const result = await collectionBooking.updateOne(filter,updatedDoc);
-      res.send(result)
-      
-    })
-    app.delete('/api/v1/booking/delete/:id',(req,res)=>{
-      const {id} = req.params ;
-      const query = {_id: new ObjectId(id)};
-      const result = collectionBooking.deleteOne(query);
-      res.send(result);
-    })
-    
+    res.json({id:session.id})
+  })
+
+        
+app.post('/webhook',bodyParser.raw({type: 'application/json'}),async(req, res) => {
+  const sig = req.headers['stripe-signature'];
+  const payload = req.body;
+  const payloadString = JSON.stringify(payload, null, 2);
+  const secret = "whsec_22f77f73c6ecf54cf254a3e62b3dd223d18e7a3cc8833cb153c54e9f2473d57f";
+  const header = stripe.webhooks.generateTestHeaderString({
+          payload: payloadString,
+          secret,
+  });
+  
+   let event;
+   try {
+        event = stripe.webhooks.constructEvent(payloadString, header, secret);
+  
+   } catch (err) {
+          console.log(`Webhook Error: ${err.message}`)
+          return res.status(400).send(`Webhook Error: ${err.message}`);
+   }
+   console.log(event.data.object.metadata.customer)
+  //  console.log(JSON.parse(event.data.object.metadata))
+
+  // Handle the event
+  // switch (event.type) {
+  //   case 'payment_intent.succeeded':
+  //     const paymentIntentSucceeded = event.data.object;
+  //     console.log(paymentIntentSucceeded)
+  //     // Then define and call a function to handle the event payment_intent.succeeded
+  //     break;
+  //   // ... handle other event types
+  //   default:
+  //     console.log(`Unhandled event type ${event.type}`);
+  // }
+  // if(eventType === 'checkout.session.completed'){
+  // stripe.customers.retrieve(data.metadata).then((metaData)=>{
+  //   console.log(custom_fields)
+  // }).catch(err=> console.log(err.message))
+  // }
+  // Return a 200 response to acknowledge receipt of the event
+  res.send();
+
+});
+ 
+
+  // registration 
+  app.post('/users/registration',async(req,res)=>{
+    const user = req.body;
+  const result = await registered_users.insertOne(user);
+  res.send(result)
+  })
+
+  app.post('/product/review/post',async(req,res)=>{
+    const review = req.body;
+    const result = await productsReviewCollection.insertOne(review);
+    res.send(result);
+  })
+  app.get('/product/get-reviews',async(req,res)=>{
+    const id = req.query.id;
+    const filter = {
+      productId:id
+    }
+   
+    const result = await productsReviewCollection.find(filter).toArray();
+    res.send(result)
+  })
+  
   } finally {
    
   }
