@@ -245,6 +245,7 @@ app.post('/webhook',bodyParser.raw({type: 'application/json'}),async(req, res) =
           return res.status(400).send(`Webhook Error: ${err.message}`);
    }
    console.log(event.data.object.metadata.customer)
+   app.get()
   //  console.log(JSON.parse(event.data.object.metadata))
 
   // Handle the event
