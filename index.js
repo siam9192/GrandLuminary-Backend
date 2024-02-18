@@ -7,6 +7,7 @@ const bodyParser = require('body-parser')
 require('dotenv').config()
 const stripe = require('stripe')(process.env.STRIPE_SECRET);
 const app = express();
+const products = require('./products')
 
 app.use(cors())
 app.use(express.json());
@@ -32,266 +33,106 @@ const client = new MongoClient(uri, {
 
 async function run() {
   try {
-    const db = client.db('Ego-Ecommerce');
+    const db = client.db('Electio');
     const productCollection = db.collection('Products');
     const registered_users = db.collection('Users') 
-    const cartCollection = db.collection('Carts')
-    const productsReviewCollection = db.collection('Reviews')
+    const cartCollection = db.collection('Products')
+    const productsReviewCollection = db.collection('Reviews');
+   
 
-    app.get('/products',async(req,res)=>{
-      const query = req.query;
-      const filter = { 
-       }
-      const category = query.category.split('--');
-      const brands  = query.brands.split('--');
-      const minPrice = parseInt(query.minPrice);
-      const maxPrice = parseInt(query.maxPrice);
+    app.post('/api/v1/user/add',async(req,res)=>{
+      const user = req.body;
+      const email = user.email;
+      const userExistStatus = await registered_users.findOne({email});
+    // check user if the user is exist on the database it will send user exist status true and then return other wish user data will added on the database
 
-      const perPage = parseInt(query.perPage);
-      const currentPage = parseInt(query.currentPage)
-      console.log(currentPage)
-      category.shift();
-      brands.shift();
-    if(category.length){
-      filter.category={$in:category}
-    }
-    if(brands.length){
-      filter.brand = {$in:brands}
-    }
-    if(minPrice){
-      filter.pricing = {}
-      filter.pricing.price = {}
-     filter.pricing.price.$gt = minPrice
-    }
-    if(maxPrice){
-      if(filter.pricing){
-      filter.pricing.price.$lt = maxPrice
+      if(userExistStatus){
+        res.send({
+        exist: true
+        })
+        return;
       }
-      else{
-        filter.pricing = {}
-        filter.pricing.price.$lt = maxPrice
-      }
-     }
-
- 
-      const result = await productCollection.find(filter).skip((currentPage-1)*perPage).limit(perPage).toArray();
+      const result = await registered_users.insertOne(user);
       res.send(result);
       
     })
-    app.get('/products/document-count',async(req,res)=>{
-      const query = req.query;
-      const filter = {  }
-      const category = query.category.split('--');
-      const brands  = query.brands.split('--');
-      const minPrice = parseInt(query.minPrice);
-      const maxPrice = parseInt(query.maxPrice);
-      category.shift();
-      brands.shift();
-    if(category.length){
-      filter.category={$in:category}
-    }
-    if(brands.length){
-      filter.brand = {$in:brands}
-    }
-    if(minPrice){
-      filter.pricing = {}
-      filter.pricing.price = {}
-     filter.pricing.price.$gt = minPrice
-    }
-    if(maxPrice){
-      if(filter.pricing){
-      filter.pricing.price.$lt = maxPrice
-      }
-      else{
-        filter.pricing = {}
-        filter.pricing.price.$lt = maxPrice
-      }
-     }
-   const result = await productCollection.countDocuments(filter);
-   res.send({document:result})
-  
-
-    })
-
-    app.get('/product/get-details/:id',async(req,res)=>{
-      const query = {
-        _id:new ObjectId(req.params.id)
-      }
-      const result = await productCollection.findOne(query);
-      res.send(result)
-    })
-    app.get('/products-all/new-arrivals',async(req,res)=>{
-      const category = req.query.category;
-      const filter = {
-        category
-      }
-      const result = await productCollection.find(filter).toArray();
-      res.send(result)
-    
-    })
-     app.post('/product/post',async(req,res)=>{
-      const product = req.body;
-      const result = await productCollection.insertOne(product);
-      res.send(result)
-     })
-
-     app.get('/products/deal-of-the-day',async(req,res)=>{
-      const query = {
-        currentStatus:'Deal of the day'
-      }
-      const result = await productCollection.find(query).toArray();
-      res.send(result)
-     })
-     app.get('/products/best-selling',async(req,res)=>{
-      const query = {
-        currentStatus:'Best Selling'
-      }
-      const result = await productCollection.find(query).toArray();
-      res.send(result)
-     })
-     app.get('/products/recomended',async(req,res)=>{
-      const query = {
-        'pricing.discount': {
-          $gt: 0
-        }
-      }
-      const result = await productCollection.find(query).toArray();
-      res.send(result)
-     })
-   
-  // Add to cart
-app.post('/add-to-cart',async(req,res)=>{
-const cart = req.body;
-const result = await cartCollection.insertOne(cart);
-res.send(result)
-})
-
-  // users Cart
-  app.get('/user/cart/:email',async(req,res)=>{
+      app.get('/api/v1/check_user',async(req,res)=>{
     const email = req.params.email;
-    const query = {email};
-    const result = await cartCollection.find(query).toArray();
-    res.send(result)
+    // check the user account status if the user is blocked it will send the account status true;
+    const result = await registered_users.findOne({email:email,isBlocked: true});
+    if(result){
+      res.send({status:true})
+    }
+    else{
+      res.send({status:false})
+    }
   })
-  app.delete('/user/cart/delete',async(req,res)=>{
-    const id = req.query.id;
+
+
+  // get  products based on search 
+  app.get('/api/v1/get/products',async(req,res)=>{
+    const params = req.query;
+   
+    // search variable
+    const keyword = params.key;
+    const categories = params.categories.split(',').filter(val=>val !== '')|| [];
+    const brands = params.brands.split(',').filter(val=>val !== '')||[];
+    const minimumPrice = parseInt(params.minPrice)
+    const maximumPrice = parseInt(params.maxPrice);
+    const stockStatus = parseInt(params.parseInt);
+    productCollection.createIndex({
+      model:'text',
+      description: 'text'
+      // 'details.name':'text',
+      // 'details.category':'text'
+    })
+
+    const filter = {
+    };
+  
+    // variable for sorting data
+    const sortValue = params.sort;
+    const sort = {
+    
+    }
+    
+  if (categories.length) {
+    filter['details.category'] = {$in:categories}
+  }
+  if (brands.length){
+    filter['details.brand'] = {$in:brands}
+  }
+  // if(colors.length){
+  //   filter.colors=colors
+  // }
+ 
+  // if(minimumPrice){
+  //   filter.minimumPrice = minimumPrice;
+  // }
+  // if(maximumPrice !== '' || maximumPrice !== undefined){
+  //   filter.maximumPrice = maximumPrice;
+  // }
+  // if(stockStatus)
+  //   filter.quantity = {$gt:0}
+
+ console.log(filter)
+    const result = await productCollection.find(filter).toArray();
+    res.send(result)
+    // console.log(result)
+  })
+
+  app.get('/api/v1/get/product/:id',async(req,res)=>{
+    const id = req.params.id;
+
     const filter = {
       _id: new ObjectId(id)
     }
-  
-    const result = await cartCollection.deleteOne(filter);
-    res.send(result)
-    console.log(result)
-   
+    const product = await productCollection.findOne(filter);
+    res.send(product)
   })
-
-  // stripe payment 
-  app.post('/create-checkout-session',async(req,res)=>{
-    const {products} = req.body;
-    // const metaData = {
-    //   userEmail:
-    // }
-    const getPercentageValue = (mainNumber,percent)=>{
-      const result = (percent/100)*mainNumber;
-      return parseInt(result);
-    }
-    
-    const lineItems = products.map((product)=>({
-      price_data :{
-        currency:'USD',
-        product_data:{
-          name:product.name,
-          images:[product.image]
-        },
-        unit_amount:Math.round(product.price * 100),
-      },
-      quantity:product.quantity
-
-    }))
+  
  
-    const session = await stripe.checkout.sessions.create({
-      payment_method_types:['card'],
-      line_items:lineItems,
-      mode:'payment',
-      metadata:
-        {
-          customer:JSON.stringify(products.map(cart=>cart.email)),
-          cartsId:JSON.stringify(products.map(cart=> cart._id))
-        }
-      ,
-      success_url:'http://localhost:5173/ego/my-cart',
-      cancel_url:'http://localhost:5173/ego/my-cart'
-    })
-    res.json({id:session.id})
-  })
-
-        
-app.post('/webhook',bodyParser.raw({type: 'application/json'}),async(req, res) => {
-  const sig = req.headers['stripe-signature'];
-  const payload = req.body;
-  const payloadString = JSON.stringify(payload, null, 2);
-  const secret = "whsec_22f77f73c6ecf54cf254a3e62b3dd223d18e7a3cc8833cb153c54e9f2473d57f";
-  const header = stripe.webhooks.generateTestHeaderString({
-          payload: payloadString,
-          secret,
-  });
-  
-   let event;
-   try {
-        event = stripe.webhooks.constructEvent(payloadString, header, secret);
-  
-   } catch (err) {
-          console.log(`Webhook Error: ${err.message}`)
-          return res.status(400).send(`Webhook Error: ${err.message}`);
-   }
-   console.log(event.data.object.metadata.customer)
-   app.get()
-  //  console.log(JSON.parse(event.data.object.metadata))
-
-  // Handle the event
-  // switch (event.type) {
-  //   case 'payment_intent.succeeded':
-  //     const paymentIntentSucceeded = event.data.object;
-  //     console.log(paymentIntentSucceeded)
-  //     // Then define and call a function to handle the event payment_intent.succeeded
-  //     break;
-  //   // ... handle other event types
-  //   default:
-  //     console.log(`Unhandled event type ${event.type}`);
-  // }
-  // if(eventType === 'checkout.session.completed'){
-  // stripe.customers.retrieve(data.metadata).then((metaData)=>{
-  //   console.log(custom_fields)
-  // }).catch(err=> console.log(err.message))
-  // }
-  // Return a 200 response to acknowledge receipt of the event
-  res.send();
-
-});
  
-
-  // registration 
-  app.post('/users/registration',async(req,res)=>{
-    const user = req.body;
-  const result = await registered_users.insertOne(user);
-  res.send(result)
-  })
-
-  app.post('/product/review/post',async(req,res)=>{
-    const review = req.body;
-    const result = await productsReviewCollection.insertOne(review);
-    res.send(result);
-  })
-  app.get('/product/get-reviews',async(req,res)=>{
-    const id = req.query.id;
-    const filter = {
-      productId:id
-    }
-   
-    const result = await productsReviewCollection.find(filter).toArray();
-    res.send(result)
-  })
-  
   } finally {
    
   }
