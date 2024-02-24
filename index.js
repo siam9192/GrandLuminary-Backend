@@ -117,6 +117,21 @@ async function run() {
     const sortFilter = {
     
     }
+
+    if(keyword){
+      filter.$or = [
+        { model: { $regex: keyword, $options: 'i' } },
+        { description: { $regex: keyword, $options: 'i' } },
+        { 'details.category': { $regex: keyword, $options: 'i' } },
+        {searchKeywords: {
+          $elemMatch: {
+            $regex: RegExp(keyword),
+            $options: 'i'
+          }
+        }
+      }
+    ]
+  }
     
   if (categories.length) {
     filter['details.category'] = {$in:categories}
@@ -126,11 +141,7 @@ async function run() {
   }
   if(minimumPrice || maximumPrice){
     filter['pricing.discountPrice']  = {}
-    // = {
-    //   $and:[
-
-    //   ]
-    // }
+   
   }
   if(minimumPrice){
 
@@ -149,10 +160,7 @@ async function run() {
   else if(sort === 's'){
     sortFilter['pricing.details.sold'] = -1
   }
-  console.log(sort)
-  console.log(
-    sortFilter
-  )
+  
    const totalProducts = await productCollection.countDocuments(filter);
   
     const result = await productCollection.find(filter).sort(sortFilter).skip((currentPage-1)*perPage).limit(perPage).toArray();
@@ -163,8 +171,33 @@ async function run() {
     })
     
   })
- app.get('/api/v1/product/category',async(req,res)=>{
-const categories = []
+
+
+ app.get('/api/v1/count/products/categories',async(req,res)=>{
+const categories = ['Smart Phones','Watches','Drones','Monitors','Headphones','Cameras','Controllers'];
+
+const filter = [
+  {
+    $match : {
+      'details.category': {
+        $in:categories
+      }
+    }
+      }
+  ,
+  {
+    $group:{
+      _id: '$details.category',
+      count: {$sum:1}
+      
+    }
+
+  }
+  
+]
+
+const result = await productCollection.aggregate(filter).toArray();
+res.send(result);
  })
   app.get('/api/v1/get/product/:id',async(req,res)=>{
     const id = req.params.id;
@@ -190,6 +223,7 @@ const categories = []
     res.send(result)
     
   })
+  
    app.get('/api/v1/get/suggested/products',async(req,res)=>{
     const bestSelling = await productCollection.find().sort({'details.sold': -1}).limit(3).toArray();
     const recentAdded = await productCollection.find().sort({_id:-1}).limit(3).toArray();
@@ -255,7 +289,6 @@ res.send({deleteStatus:true})
   res.send({deleteStatus:false})
  }
   
-  
  })
 
 
@@ -270,7 +303,7 @@ res.send({deleteStatus:true})
       total_amount: body.total,
       currency: 'BDT',
       tran_id: transitionId, // use unique tran_id for each api call
-      success_url: `http://localhost:5000/get/success/${transitionId}`,
+      success_url: `${process.env.PAYMENT_SUCCESS}${transitionId}`,
       fail_url: 'http://localhost:3030/fail',
       cancel_url: 'http://localhost:3030/cancel',
       ipn_url: 'http://localhost:3030/ipn',
@@ -324,9 +357,12 @@ res.send({deleteStatus:true})
       res.send({url:GatewayPageURL})
       console.log('Redirecting to: ', GatewayPageURL)
   });
+ 
+  
 
   app.post('/get/success/:id',async(req,res)=>{
       const transitionId = req.params.id;
+      console.log(transitionId)
       const update = {
         $set:{
           orderStatus: 'success'
@@ -339,11 +375,35 @@ res.send({deleteStatus:true})
      await cartCollection.deleteMany({_id:{
       $in:[...productsId]
      }})
-      res.redirect('http://localhost:5173/my-cart')
+     console.log(process.env.PAYMENT_SUCCESS_PAGE)
+      res.redirect(process.env.PAYMENT_SUCCESS_PAGE)
 
      }
   })
 })
+
+app.get('/api/v1/payment-history/:email',async(req,res)=>{
+  const email = req.params.email;
+
+  const filter = [
+    $match:{
+      customer:email,
+   orderStatus:'success'
+    },
+    {
+   $unwind
+    }
+    ,
+   {
+   
+   }
+  ]
+  
+  const result = await orderCollection.aggregate().toArray();
+  console.log(result)
+
+})
+
 
   } finally {
    
